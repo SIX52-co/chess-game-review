@@ -292,6 +292,23 @@ button { cursor: pointer; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label, .field .lab2 { font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
 .field .help { font-size: 12.5px; color: var(--muted); }
+.cc-row { display: flex; gap: 8px; }
+.cc-row input { flex: 1; min-width: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 9px 10px; }
+.btn2.go { background: var(--green); color: #fff; }
+.btn2.go:hover { background: var(--green-hi, #95c75c); }
+.cc-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.cc-list:empty { display: none; }
+.cc-game { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; border: 0; text-align: left; background: var(--panel-2); border-radius: 6px; padding: 8px 10px; color: inherit; cursor: pointer; }
+.cc-game:hover { background: var(--panel-3); }
+.cc-game .side { width: 18px; height: 18px; border-radius: 4px; border: 1px solid #666; }
+.cc-game .side.w { background: #fff; } .cc-game .side.b { background: #1b1a18; }
+.cc-game .who { min-width: 0; }
+.cc-game .who b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-game .who small { color: var(--muted); font-size: 12px; }
+.cc-game .res { font-weight: 800; font-size: 13px; padding: 2px 8px; border-radius: 4px; }
+.cc-game .res.win { background: #3d8fd6; color: #fff; } .cc-game .res.loss { background: #d9733a; color: #fff; } .cc-game .res.draw { background: #8a8782; color: #fff; }
+.cc-or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin: 2px 0; }
+.cc-or::before, .cc-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 textarea#pgn { width: 100%; min-height: 200px; resize: vertical; background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 10px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
 input[type="text"], select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 9px 10px; width: 100%; }
 .seg { display: flex; background: var(--panel-2); border-radius: 5px; padding: 3px; gap: 3px; }
@@ -343,6 +360,17 @@ input[type="text"], select { background: var(--panel-2); border: 1px solid var(-
       <div class="side-b" id="sideBody"></div>
       <div class="side-b" id="loadBody" hidden>
         <p class="err" id="loadErr" hidden></p>
+        <div class="field">
+          <label for="ccUser">Load from Chess.com</label>
+          <form class="cc-row" id="ccForm" autocomplete="off">
+            <input type="text" id="ccUser" placeholder="Chess.com username" spellcheck="false" autocapitalize="off" aria-label="Chess.com username">
+            <button class="btn2 go" id="ccGo" type="submit">Find games</button>
+          </form>
+          <p class="help" id="ccMsg" aria-live="polite"></p>
+          <div class="cc-list" id="ccList"></div>
+          <button class="btn2" id="ccMore" type="button" hidden>Load older games</button>
+        </div>
+        <div class="cc-or"><span>or</span></div>
         <div class="field">
           <label for="pgn">Paste a PGN</label>
           <textarea id="pgn" spellcheck="false" placeholder="[Event &quot;Live Chess&quot;]&#10;1. e4 e5 2. Nf3 Nc6 …"></textarea>
@@ -1691,6 +1719,62 @@ $('sideSeg').addEventListener('click', e => {
 });
 if (!MOVETIME[S.depth]) S.depth = 16;
 $('depth').value = String(S.depth);
+
+/* ---- Load games straight from Chess.com's public API (newest first) ---- */
+const CC = { user: '', archives: [], next: -1, games: [], busy: false };
+const CC_DRAW = ['agreed', 'repetition', 'stalemate', 'insufficient', '50move', 'timevsinsufficient'];
+const ccTc = g => { const tc = String(g.time_control || ''); if (g.time_class === 'daily') return 'Daily'; const [b, inc] = tc.split('+'); const m = Math.round(+b / 60); return `${g.time_class[0].toUpperCase() + g.time_class.slice(1)} ${m >= 1 ? m : (+b) + 's'}${inc && +inc ? ' | ' + inc : ''}`; };
+function ccMsg(t) { $('ccMsg').textContent = t; }
+async function ccFind(e) {
+  if (e) e.preventDefault();
+  const u = $('ccUser').value.trim().toLowerCase();
+  if (!u || CC.busy) return;
+  if (!/^[a-z0-9_-]{3,25}$/.test(u)) { ccMsg('That doesn’t look like a Chess.com username.'); return; }
+  CC.busy = true; CC.user = u; CC.games = []; CC.archives = []; $('ccList').innerHTML = ''; $('ccMore').hidden = true; ccMsg('Looking up ' + u + '…');
+  store.set('ccuser', u);
+  try {
+    const r = await fetch(`https://api.chess.com/pub/player/${encodeURIComponent(u)}/games/archives`);
+    if (r.status === 404) { ccMsg(`No Chess.com player called “${u}”.`); return; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    CC.archives = (await r.json()).archives || [];
+    if (!CC.archives.length) { ccMsg(`${u} hasn’t played any games yet.`); return; }
+    CC.next = CC.archives.length - 1;
+    await ccLoadMore(true);
+  } catch (err) {
+    ccMsg(location.hostname.endsWith('claude.ai') || location.hostname.includes('claudeusercontent') ? 'Loading from Chess.com only works on the web app version of this page.' : 'Couldn’t reach Chess.com. Check your connection and try again.');
+  } finally { CC.busy = false; }
+}
+async function ccLoadMore(first) {
+  const want = CC.games.length + 20;
+  while (CC.next >= 0 && CC.games.length < want) {
+    const r = await fetch(CC.archives[CC.next--]); if (!r.ok) continue;
+    const gs = ((await r.json()).games || []).filter(g => g.rules === 'chess' && g.pgn).reverse();
+    CC.games.push(...gs);
+    ccRender();
+  }
+  ccRender();
+  $('ccMore').hidden = CC.next < 0;
+  ccMsg(CC.games.length ? `${CC.games.length} games${CC.next >= 0 ? ' so far' : ''}. Tap one to review it.` : `No standard chess games found for ${CC.user}.`);
+}
+function ccRender() {
+  const u = CC.user;
+  $('ccList').innerHTML = CC.games.map((g, i) => {
+    const me = g.white.username.toLowerCase() === u ? 'w' : 'b', my = me === 'w' ? g.white : g.black, op = me === 'w' ? g.black : g.white;
+    const res = my.result === 'win' ? 'win' : CC_DRAW.includes(my.result) ? 'draw' : 'loss';
+    const d = new Date(g.end_time * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: new Date(g.end_time * 1000).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+    return `<button class="cc-game" type="button" data-i="${i}" title="Review this game"><span class="side ${me}" aria-label="${me === 'w' ? 'White' : 'Black'}"></span><span class="who"><b>vs ${esc(op.username)} (${op.rating})</b><small>${esc(ccTc(g))} · ${d}</small></span><span class="res ${res}">${res === 'win' ? 'Won' : res === 'loss' ? 'Lost' : 'Draw'}</span></button>`;
+  }).join('');
+}
+$('ccForm').addEventListener('submit', ccFind);
+$('ccMore').addEventListener('click', async () => { if (CC.busy) return; CC.busy = true; $('ccMore').disabled = true; try { await ccLoadMore(); } finally { CC.busy = false; $('ccMore').disabled = false; } });
+$('ccList').addEventListener('click', e => {
+  const b = e.target.closest('.cc-game'); if (!b) return;
+  const g = CC.games[+b.dataset.i]; if (!g) return;
+  $('pgn').value = g.pgn; $('user').value = CC.user; store.set('user', CC.user);
+  const d = +$('depth').value; S.depth = d; store.set('depth3', d);
+  if (loadGame(g.pgn)) setView('summary');
+});
+$('ccUser').value = store.get('ccuser', '') || DEFAULT_USER;
 $('user').value = store.get('user', '') || DEFAULT_USER;
 $('sideSeg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.side === S.sidePref)));
 
