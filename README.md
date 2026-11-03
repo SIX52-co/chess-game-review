@@ -12,6 +12,14 @@ A single-page chess game review: enter a Chess.com username and pick a game (or 
 
 Lessons unlock in order within a course (you can skip ahead after a confirmation), a graduation-cap tile marks each finished course, and the Lesson Library lists every course with level and topic filters. Progress is stored in the browser.
 
+## Puzzles
+
+Rated puzzles on a level road (five per level), Puzzle Rush, a Daily Puzzle, Custom sets by theme and difficulty, and a review queue that brings missed puzzles back after 1, 3 and 7 days. About 900 puzzles from the Lichess database, rated 400 to 2600.
+
+## For You
+
+Enter a Chess.com username and the site fetches recent games from Chess.com's public API, runs Stockfish on them in the browser, ranks the kinds of mistakes that cost the most (unprotected pieces, missed mates, threats against your king, missed forks and tactics, opening and endgame errors), and recommends lessons plus a custom puzzle set. It can also start your puzzle rating from your Chess.com puzzle rating. Nothing is uploaded anywhere.
+
 ## Run locally
 
 ```
