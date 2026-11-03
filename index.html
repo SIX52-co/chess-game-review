@@ -63,13 +63,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--green-hi); outline-offset: 2px; }
 
+.topnav { display: flex; align-items: center; gap: 18px; height: 52px; padding: 0 16px; background: #262421; border-bottom: 1px solid #3e3c39; position: sticky; top: 0; z-index: 30; }
+.tn-brand { display: flex; align-items: center; gap: 9px; color: #fff; font-weight: 800; font-size: 16px; text-decoration: none; white-space: nowrap; }
+.tn-brand svg { width: 26px; height: 26px; }
+.topnav nav { display: flex; gap: 4px; margin-left: auto; }
+.topnav nav a { color: #dedcd9; text-decoration: none; font-weight: 700; font-size: 15px; padding: 7px 12px; border-radius: 6px; }
+.topnav nav a:hover { background: #3c3a37; color: #fff; }
+.topnav nav a[aria-current="page"] { background: #3c3a37; color: #fff; }
+@media (max-width: 420px) { .tn-brand span, .tn-brand { font-size: 14px; } .topnav { gap: 8px; } }
 .shell2 { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 100vh; }
 .wrap { width: 100%; min-width: 0; max-width: 1240px; margin: 0 auto; padding-inline: 16px; padding-block: 14px 28px; }
 .app { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 20px; align-items: start; }
 @media (max-width: 1130px) { .app { grid-template-columns: minmax(0, 1fr); } }
 
 /* Board column */
-.boardcol { width: 100%; max-width: max(520px, min(760px, calc(100vh - 82px))); justify-self: center; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.boardcol { width: 100%; max-width: max(520px, min(760px, calc(100vh - 134px))); justify-self: center; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 @media (max-width: 1130px) { .boardcol { max-width: 640px; } }
 .pstrip { display: flex; align-items: center; gap: 10px; min-height: 44px; padding-left: 34px; }
 .av { width: 40px; height: 40px; border-radius: 3px; background: var(--panel-3); flex: none; display: grid; place-items: center; overflow: hidden; }
@@ -149,7 +157,7 @@ button { cursor: pointer; }
 .tx-miss { color: var(--c-miss); } .tx-blunder { color: var(--c-blunder); } .tx-forced { color: var(--c-forced); }
 
 /* Sidebar */
-.side { background: var(--panel); border-radius: 6px; display: flex; flex-direction: column; min-width: 0; height: min(calc(100vh - 28px), 900px); position: sticky; top: calc(env(safe-area-inset-top, 0px) + 14px); overflow: hidden; }
+.side { background: var(--panel); border-radius: 6px; display: flex; flex-direction: column; min-width: 0; height: min(calc(100vh - 80px), 900px); position: sticky; top: calc(env(safe-area-inset-top, 0px) + 66px); overflow: hidden; }
 @media (max-width: 1130px) { .side { position: static; height: auto; } }
 .side-h { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; height: 52px; background: var(--panel-2); flex: none; }
 .side-h h1 { font-size: 17px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px; }
@@ -326,6 +334,8 @@ input[type="text"], select { background: var(--panel-2); border: 1px solid var(-
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 
+<header class="topnav"><a class="tn-brand" href="./"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#81b64c"/><circle cx="28" cy="28" r="14" fill="none" stroke="#fff" stroke-width="6"/><path d="M38 38l12 12" stroke="#fff" stroke-width="7" stroke-linecap="round"/></svg>Chess Post-Mortem</a>
+  <nav aria-label="Site"><a href="./" aria-current="page">Game Review</a><a href="learn.html">Learn</a></nav></header>
 <div class="shell2">
 <div class="wrap">
   <main class="app">
