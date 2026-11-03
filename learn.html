@@ -785,7 +785,8 @@ body.pub .navbtn[data-view]:not([data-view="lessons"]):not([data-view="puzzles"]
 (() => {
 'use strict';
 const D = JSON.parse(document.getElementById('data').textContent);
-const PUB = !!(D.meta && D.meta.public); if (PUB) document.body.classList.add('pub');
+const PUB = !!(D.meta && D.meta.public);
+const fyOn = () => PUB && typeof FY !== 'undefined' && FY && FY.ranked && FY.ranked.length && store.get('fyFocus', true); if (PUB) document.body.classList.add('pub');
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1892,7 +1893,7 @@ function renderCatalog() {
   $('v-lessons').innerHTML = `
     <div class="page"><button class="backlink" id="catBack">${SVG.back} Your path</button>
     <div class="ph">${icon('star', 34)}<div><h1>${PUB ? 'Lesson Library' : 'Lessons'}</h1><p>${PUB ? 'Every course in one place. Filter by level or topic, or follow the path.' : 'Learn from your own mistakes, then build the patterns every strong player knows.'}</p></div></div>
-    ${PUB ? '' : `<h2 class="sec">Recommended for you</h2>
+    ${PUB ? (fyOn() ? `<h2 class="sec">Recommended for ${esc(FY.user)}</h2><div class="cards">${fyRecs().lessons.map(key => { const f = findLesson(key), lp = lessonProgress(f.l); return `<button class="card" data-lesson="${esc(key)}"><div class="thumb">${lessonThumb(f.l)}${lp.done ? `<span class="done">${icon('ok', 26)}</span>` : ''}</div><div class="cbody"><h3>${esc(f.l.title)}</h3><div class="meta">${esc(f.c.title)} · ${esc(f.c.level)}</div></div></button>`; }).join('')}</div>` : '') : `<h2 class="sec">Recommended for you</h2>
     <button class="wide" data-course="mine"><div class="thumb">${nextMine ? exThumb(nextMine.example) : ''}</div>
       <div class="body"><span><span class="pill Personal">From your games</span></span><h3>${esc(MY_COURSE.title)}</h3><div class="blurb">${esc(MY_COURSE.blurb)}</div>
       <div class="meta note">${mp.total} lessons · ${mp.n} challenges · ${mp.d} completed</div>
@@ -1903,6 +1904,7 @@ function renderCatalog() {
       <div class="tabs3" id="lfCat">${(PUB ? ['All', 'Basics', 'Tactics', 'Checkmate', 'Openings', 'Endgames', 'Strategy'] : ['All', 'Tactics', 'Checkmate', 'Endgames']).map(x => `<button data-v="${x}" aria-pressed="${LF.cat === x}">${x === 'All' ? 'All topics' : x}</button>`).join('')}</div></div>
     <div class="cards">${list.map(courseCard).join('') || '<p class="note">No courses match these filters.</p>'}</div></div>`;
   $('catBack').onclick = () => { LV_LIST = false; renderLessons(); };
+  $('v-lessons').querySelectorAll('.card[data-lesson]').forEach(b => b.onclick = () => show('lesson', b.dataset.lesson));
   $('v-lessons').querySelectorAll('[data-course]').forEach(b => b.addEventListener('click', () => show('course', b.dataset.course)));
   $('lfLevel').querySelectorAll('button').forEach(b => b.onclick = () => { LF.level = b.dataset.v; store.set('lf', LF); renderCatalog(); });
   $('lfCat').querySelectorAll('button').forEach(b => b.onclick = () => { LF.cat = b.dataset.v; store.set('lf', LF); renderCatalog(); });
@@ -2140,7 +2142,8 @@ function openCustom() {
 /* ---------- Puzzle trainer (rated, daily, custom, rush) ---------- */
 let Z = null;
 function pickPuzzle(theme, avoid) {
-  const pool = D.puzzles.concat(GEN.puzzles).filter(p => (theme === 'all' || p.group === theme) && p.id !== avoid);
+  let pool = D.puzzles.concat(GEN.puzzles).filter(p => (theme === 'all' || p.group === theme) && p.id !== avoid);
+  if (theme === 'all' && fyOn() && Math.random() < .65) { const g = fyRecs().groups, f = pool.filter(p => g.includes(p.group)); if (f.length >= 20) pool = f; }
   const fresh = pool.filter(p => P.solved[p.id] == null);
   const missed = pool.filter(p => P.solved[p.id] === 0);
   const src = fresh.length ? fresh : missed.length ? missed : pool;
@@ -3315,6 +3318,7 @@ function renderPuzzleHub() {
   const say = due ? `You have <b>${due}</b> missed puzzle${due === 1 ? '' : 's'} due for review.`
     : inL ? `<b>${LVL_N - inL}</b> more puzzle${LVL_N - inL === 1 ? '' : 's'} to clear level ${inW + 1}. Your rating is <b>${P.rating}</b>.`
     : `In every puzzle, only one move works… Can you find it?`;
+  const sayFy = fyOn() ? ` Tuned to <b>${esc(FY.user)}</b>’s games: extra puzzles on ${FY.ranked.slice(0, 2).map(r => (FY_CATS[r.k] || {}).title || '').filter(Boolean).map(x => x.toLowerCase()).join(' and ')}.` : '';
   const modes = [
     ['rated', MODE_IC.rated, '#e2703a', 'Puzzles', PUB ? 'Rated, matched to your level' : 'Rated, from your games and classic patterns', P.rating],
     ['rush', MODE_IC.rush, '#d4a017', 'Puzzle Rush', 'Three strikes and you’re out', `Best ${Math.max((P.rush || {})['3'] || 0, (P.rush || {})['5'] || 0, (P.rush || {}).surv || 0)}`],
@@ -3332,7 +3336,7 @@ function renderPuzzleHub() {
           <div class="scard" style="background:rgba(0,0,0,.25)"><h3>Puzzle rating</h3>${P.history.filter(h => h.r != null).length > 1 ? sparkSvg(P.history.filter(h => h.r != null).map(h => h.r).slice(-40)) : '<p class="sub">Solve rated puzzles to build your graph.</p>'}</div></div>`
         : `<svg class="roadmap" viewBox="0 0 ${W} ${H}" width="100%" style="aspect-ratio:${W}/${H}" role="group" aria-label="Puzzle levels"><defs>${DECO_DEFS}${PIECE3D_DEFS}${defs}</defs>${bands}${decos}${tiles}${clouds}</svg>`}
       </div>
-      ${PP_LIST ? '' : `<div class="road-coach" id="pCoach"><div class="cav sm"><span class="pc wn"></span></div><div class="bubble"><p>${say}</p></div></div>`}
+      ${PP_LIST ? '' : `<div class="road-coach" id="pCoach"><div class="cav sm"><span class="pc wn"></span></div><div class="bubble"><p>${say}${sayFy}</p></div></div>`}
       <button class="road-jump" id="pJump" hidden aria-label="Back to your level">${ISO.up}</button>
       <div class="road-f">
         <div class="rf-row"><span class="rf-pts">${P.points.toLocaleString()}</span><span class="rf-fire">${IC5.flame}${actStreak()}</span></div>
@@ -3420,7 +3424,8 @@ function renderLessons() {
     });
   });
   const allL = nodes.filter(n => n.t === 'lesson');
-  const cc = curCourse(), nextN = allL.find(n => n.c === cc && !lessonProgress(n.l).done) || allL.find(n => !lessonProgress(n.l).done) || allL[allL.length - 1];
+  const REC = fyOn() ? fyRecs().lessons : [];
+  const cc = curCourse(); let nextN = REC.map(k => allL.find(n => n.l.key === k)).find(n => n && !lessonProgress(n.l).done) || allL.find(n => n.c === cc && !lessonProgress(n.l).done) || allL.find(n => !lessonProgress(n.l).done) || allL[allL.length - 1];
   const W = 400, A = 54, B = 31, T = 9, DY = 64, TOP = 120, BOT = 200, LBL = 150;
   let y = 0; const pos = [];
   nodes.forEach(n => { if (n.t === 'label') { y += 96; pos.push(y); y += 118; } else { pos.push(y); y += DY; } });
@@ -3457,9 +3462,9 @@ function renderLessons() {
       return;
     }
     const lp = lessonProgress(n.l), li = n.c.lessons.indexOf(n.l), prevOk = li <= 0 || lessonProgress(n.c.lessons[li - 1]).done;
-    const st = lp.done ? 'done' : n === nextN ? 'cur' : (PUB && !prevOk) ? 'lock' : 'todo';
+    const st = lp.done ? 'done' : n === nextN ? 'cur' : (PUB && !prevOk && !REC.includes(n.l.key)) ? 'lock' : 'todo';
     const c = st === 'cur' ? { top: pal.hi, s1: pal.h1, s2: pal.h2 } : st === 'done' ? { top: pal.top, s1: pal.s1, s2: pal.s2 } : { top: pal.dim, s1: pal.d1, s2: pal.d2 };
-    items += `<g class="lnode ${st}" data-lesson="${esc(n.l.key)}" tabindex="0" role="button" aria-label="${esc(n.l.title)}${lp.done ? ', completed' : st === 'cur' ? ', next lesson' : ''}">${block(x, yy, A, B, T, c)}${st === 'lock' ? `<svg x="${x - 13}" y="${yy - 15}" width="26" height="26" viewBox="0 0 24 24" style="color:rgba(255,255,255,.35)"><path fill="currentColor" d="M7 10V7a5 5 0 0110 0v3h1.5v11h-13V10zm2 0h6V7a3 3 0 00-6 0z"/></svg>` : lessonIcon(n.l.key, x, yy, 30, st === 'todo' ? 'dim' : 'on')}
+    items += `<g class="lnode ${st}" data-lesson="${esc(n.l.key)}" tabindex="0" role="button" aria-label="${esc(n.l.title)}${lp.done ? ', completed' : st === 'cur' ? ', next lesson' : ''}">${block(x, yy, A, B, T, c)}${REC.includes(n.l.key) && !lp.done ? `<g class="recstar"><circle cx="${x - A + 16}" cy="${yy - 6}" r="10" fill="#f7c631" stroke="#fff" stroke-width="2"/><path transform="translate(${x - A + 16} ${yy - 6}) scale(.42)" d="M0-12l3.5 7.2 7.9 1.1-5.7 5.6 1.3 7.9L0 6.1l-7 3.7 1.3-7.9-5.7-5.6 7.9-1.1z" fill="#fff"/></g>` : ''}${st === 'lock' ? `<svg x="${x - 13}" y="${yy - 15}" width="26" height="26" viewBox="0 0 24 24" style="color:rgba(255,255,255,.35)"><path fill="currentColor" d="M7 10V7a5 5 0 0110 0v3h1.5v11h-13V10zm2 0h6V7a3 3 0 00-6 0z"/></svg>` : lessonIcon(n.l.key, x, yy, 30, st === 'todo' ? 'dim' : 'on')}
       ${lp.done ? `<circle cx="${x + A - 14}" cy="${yy - 6}" r="8" fill="#81b64c" stroke="#fff" stroke-width="2"/><path d="M${x + A - 18} ${yy - 6}l3 3 5-5" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round"/>` : ''}
       ${st === 'cur' ? `<g class="ltag"><rect x="${x - 26}" y="${yy - B - 30}" width="52" height="20" rx="5" fill="#81b64c"/><path d="M${x - 5} ${yy - B - 10}l5 6 5-6z" fill="#81b64c"/><text x="${x}" y="${yy - B - 16}" text-anchor="middle" class="ltagt">NEXT</text></g>` : ''}
       <title>${esc(n.l.title)} (${esc(n.c.title)})${lp.solvedN ? ` · ${lp.solvedN}/${lp.n} done` : ''}</title></g>`;
@@ -3468,7 +3473,7 @@ function renderLessons() {
   LV_SECT = nextN.si;
   const sp = s => SECT_PAL[LSECTIONS[s].pal];
   const nl = nextN.l, lp0 = lessonProgress(nl);
-  const say = lp0.solvedN ? `Pick up where you left off: <b>${esc(nl.title)}</b>.` : nextN.c.id === 'mine' ? `${esc(nl.title)}. ${nl.count ? `This showed up ${nl.count} times in your games.` : ''}` : `Next up: <b>${esc(nl.title)}</b>.`;
+  const say = REC.includes(nl.key) && !lp0.solvedN ? `Picked for you from <b>${esc(FY.user)}</b>’s games: <b>${esc(nl.title)}</b>. Gold stars mark your other recommended lessons.` : lp0.solvedN ? `Pick up where you left off: <b>${esc(nl.title)}</b>.` : nextN.c.id === 'mine' ? `${esc(nl.title)}. ${nl.count ? `This showed up ${nl.count} times in your games.` : ''}` : `Next up: <b>${esc(nl.title)}</b>.`;
   $('v-lessons').innerHTML = `<div class="pathpage">
     <div class="pathboard">${lessonThumb(nl)}<div class="cap"><span>${esc(nextN.c.title)}</span><span>${lp0.solvedN}/${lp0.n} challenges</span></div></div>
     <aside class="road lroad" id="lRoad" style="--tint:${sp(LV_SECT).tint}">
@@ -3609,7 +3614,7 @@ async function fyRun(user, nGames) {
     FY = { user, date: Date.now(), games: G.length, analyzed, rating, tactics: tactics || null,
       rec: { w: G.filter(g => g.res === 'win').length, l: G.filter(g => g.res === 'loss').length, d: G.filter(g => g.res === 'draw').length },
       acc: accs.length ? +(accs.reduce((a, b) => a + b, 0) / accs.length).toFixed(1) : null, blunders, mistakes, ranked, examples, stopped: run.stop };
-    store.set('fy', FY); store.set('fyUser', user);
+    store.set('fy', FY); store.set('fyUser', user); store.set('fyFocus', true);
     FYRUN = null; renderForYou();
   } catch (e) {
     msg('Couldn’t reach Chess.com or start the engine. Check your connection and try again.'); fyIdle();
@@ -3641,6 +3646,7 @@ function renderForYou() {
         <div class="stat"><div class="k">Blunders</div><div class="v">${(FY.blunders / Math.max(1, FY.analyzed)).toFixed(1)}</div><div class="s">per game, plus ${(FY.mistakes / Math.max(1, FY.analyzed)).toFixed(1)} mistakes</div></div>
         <div class="stat"><div class="k">Rating</div><div class="v">${FY.rating || '—'}</div><div class="s">${FY.tactics ? 'Chess.com puzzles best ' + FY.tactics : 'Chess.com'}</div></div>
       </div>
+      ${FY.ranked.length ? `<div class="fy-cta" style="margin:0 0 4px"><div><b>${store.get('fyFocus', true) ? 'Your Puzzles and Learn tabs are personalized' : 'Personalization is off'}</b><small>${store.get('fyFocus', true) ? 'Learn shows gold stars on your recommended lessons and starts you there. Rated puzzles lean toward your weak spots.' : 'Puzzles and Learn are back to the standard path.'}</small></div><div style="display:flex;gap:8px;flex-wrap:wrap">${store.get('fyFocus', true) ? `<button class="btn2" data-go="lessons">Open Learn</button><button class="btn2" data-go="puzzles">Open Puzzles</button>` : ''}<button class="btn2" id="fyToggle">${store.get('fyFocus', true) ? 'Turn off' : 'Turn on'}</button></div></div>` : ''}
       ${FY.ranked.length ? `<h2 class="sec">What’s costing you the most</h2>
       <div class="fy-leaks">${FY.ranked.slice(0, 4).map(({ k, v }, i) => { const c = FY_CATS[k], ex = FY.examples[k]; return `<div class="fy-leak">
         ${ex ? `<a class="fy-mini" href="${esc(ex.url)}" target="_blank" rel="noopener" title="Open this game on Chess.com">${miniBoard(ex.fen, ex.me === 'b', null)}</a>` : ''}
@@ -3671,6 +3677,8 @@ function renderForYou() {
   if ($('fyStop')) $('fyStop').onclick = () => { if (FYRUN) FYRUN.stop = true; };
   $('v-foryou').querySelectorAll('[data-lesson]').forEach(b => b.onclick = () => show('lesson', b.dataset.lesson));
   if ($('fyPz')) $('fyPz').onclick = () => { const q = fyPuzzleSet(); if (q.length) openTrainer('custom', { queue: q }); };
+  if ($('fyToggle')) $('fyToggle').onclick = () => { store.set('fyFocus', !store.get('fyFocus', true)); renderForYou(); };
+  $('v-foryou').querySelectorAll('[data-go]').forEach(b => b.onclick = () => show(b.dataset.go));
   if ($('fySeed')) $('fySeed').onclick = () => { P.rating = FY.tactics; saveP(); toast(`Puzzle rating set to ${P.rating}`); renderForYou(); };
 }
 
