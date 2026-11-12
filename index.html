@@ -126,6 +126,8 @@ button { cursor: pointer; }
 .sq.l .co { color: var(--sq-d); }
 .sq.d .co { color: var(--sq-l); }
 .arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
+.sq .uhl { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.uhl.r { background: rgba(235,97,80,.8); } .uhl.g { background: rgba(172,206,89,.8); } .uhl.b { background: rgba(82,176,220,.8); } .uhl.y { background: rgba(245,190,50,.8); }
 .blayer { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
 .blayer .ic { position: absolute; transform: translate(-60%, -40%); box-shadow: 0 2px 4px rgba(0, 0, 0, .45); }
 
@@ -1122,6 +1124,8 @@ function phaseIcon(acc) {
 }
 
 /* ---------- Board ---------- */
+const ANN = { hl: {}, ar: {}, fen: null, tmp: null };
+const ANN_ARROW = { r: 'rgba(255,170,0,.8)', g: 'rgba(159,207,63,.8)', b: 'rgba(72,193,249,.8)', y: 'rgba(250,210,60,.85)' };
 function curFen() {
   if (S.retry) return S.retry.fen;
   if (S.explore) return S.explore.fens[S.explore.idx];
@@ -1146,6 +1150,7 @@ function sqXY(sq) {
 }
 function renderBoard() {
   const fen = curFen();
+  if (ANN.fen !== fen) { ANN.hl = {}; ANN.ar = {}; ANN.fen = fen; }
   const c = new Chess(fen);
   const board = c.board();
   const lm = lastMoveInfo();
@@ -1166,6 +1171,7 @@ function renderBoard() {
       if (S.selected === sq) cls += ' sel';
       if (checkSq === sq) cls += ' check';
       let inner = '';
+      if (ANN.hl[sq]) inner += `<span class="uhl ${ANN.hl[sq]}"></span>`;
       if (col === 0) inner += `<span class="co rk">${r + 1}</span>`;
       if (row === 7) inner += `<span class="co fl">${'abcdefgh'[f]}</span>`;
       if (p) { inner += `<span class="pc ${p.color}${p.type}"></span>`; if (p.color === c.turn()) cls += ' own'; }
@@ -1219,6 +1225,8 @@ function renderArrows() {
     const e = curEval(); const u = e && e.lines && e.lines[0] && e.lines[0].pv[0];
     if (u) out += arrowSvg(u, css.getPropertyValue('--arrow-engine').trim());
   }
+  for (const [u, col] of Object.entries(ANN.ar)) out += arrowSvg(u, ANN_ARROW[col]);
+  if (ANN.tmp && ANN.tmp.to !== ANN.tmp.from) out += arrowSvg(ANN.tmp.from + ANN.tmp.to, ANN_ARROW[ANN.tmp.col]);
   $('arrows').innerHTML = out;
 }
 function renderEvalBar() {
@@ -1572,6 +1580,28 @@ function setHover(sq) {
   if (sq && sq !== drag.from) { const el = $('board').querySelector(`[data-sq="${sq}"]`); if (el) el.classList.add('hover'); }
 }
 function endDrag() { if (!drag) return; if (drag.ghost) drag.ghost.remove(); $('board').classList.remove('dragging'); drag = null; }
+/* Right-click a square to highlight it, right-drag to draw an arrow, left-click to clear.
+   Shift = green, Alt = blue, Ctrl = yellow. Cleared when the position changes. */
+const annSq = (x, y) => { const el = document.elementFromPoint(x, y); const s = el && el.closest('.sq'); return s && $('board').contains(s) ? s.dataset.sq : null; };
+$('board').addEventListener('contextmenu', e => e.preventDefault());
+$('board').addEventListener('pointerdown', e => {
+  if (e.button === 2) {
+    const s = e.target.closest('.sq'); if (!s) return; e.preventDefault();
+    ANN.tmp = { from: s.dataset.sq, to: s.dataset.sq, col: e.shiftKey ? 'g' : e.altKey ? 'b' : e.ctrlKey ? 'y' : 'r', id: e.pointerId };
+    try { $('board').setPointerCapture(e.pointerId); } catch (err) {}
+  } else if (e.button === 0 && (Object.keys(ANN.hl).length || Object.keys(ANN.ar).length)) { ANN.hl = {}; ANN.ar = {}; renderBoard(); }
+});
+$('board').addEventListener('pointermove', e => {
+  const a = ANN.tmp; if (!a || e.pointerId !== a.id) return;
+  const t = annSq(e.clientX, e.clientY); if (t && t !== a.to) { a.to = t; renderArrows(); }
+});
+$('board').addEventListener('pointerup', e => {
+  const a = ANN.tmp; if (!a || e.pointerId !== a.id || e.button !== 2) return;
+  ANN.tmp = null; const to = annSq(e.clientX, e.clientY) || a.to;
+  if (to === a.from) { if (ANN.hl[to] === a.col) delete ANN.hl[to]; else ANN.hl[to] = a.col; }
+  else { const k = a.from + to; if (ANN.ar[k] === a.col) delete ANN.ar[k]; else ANN.ar[k] = a.col; }
+  renderBoard();
+});
 $('board').addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
   const sqEl = e.target.closest('.sq'); if (!sqEl) return;
