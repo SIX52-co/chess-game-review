@@ -689,7 +689,7 @@ function winW(e) {
   if (e.terminal === 'mate') return e.winner === 'w' ? 100 : 0;
   if (e.terminal === 'draw') return 50;
   if (e.mate != null) return e.mate > 0 ? 100 : 0;
-  return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * e.cp)) - 1);
+  return 50 + 50 * (2 / (1 + Math.exp(-0.0045 * e.cp)) - 1);
 }
 const winFor = (col, e) => col === 'w' ? winW(e) : 100 - winW(e);
 function cpW(e) {
@@ -935,21 +935,21 @@ function classify(i) {
   if (i < S.bookPly) { cls = 'book'; loss = 0; cpLoss = 0; }
   else if (legal === 1) cls = 'forced';
   else if (loss <= 2 && (Wb < 97 || mateFor(l0, col)) && Wa >= 45 && isSacrifice(m, ea)) cls = 'brilliant';
-  else if (mi === 0 || loss < 0.5) {
+  else if (mi === 0 || loss < 0.25) {
     cls = 'best';
     const l1 = lines[1];
-    if (mi === 0 && l1 && winFor(col, l0) - winFor(col, l1) >= 15 && !isRecapture && ea.terminal !== 'mate') cls = 'great';
+    if (mi === 0 && l1 && winFor(col, l0) - winFor(col, l1) >= 8 && !isRecapture && ea.terminal !== 'mate') cls = 'great';
   }
-  else if (loss < 2) cls = 'excellent';
-  else if (loss < 5) cls = 'good';
+  else if (loss < 3) cls = 'excellent';
+  else if (loss < 6) cls = 'good';
   else if (loss < 10) cls = 'inaccuracy';
   else if (loss < 20) cls = 'mistake';
   else cls = 'blunder';
-  if ((cls === 'mistake' || cls === 'blunder' || cls === 'inaccuracy') && loss >= 10 && prev && prev.loss >= 10 && Wb >= 60 && Wa >= 35) cls = 'miss';
-  const acc = clamp(103.1668 * Math.exp(-0.04354 * loss) - 3.1669, 0, 100);
+  if ((cls === 'mistake' || cls === 'blunder' || cls === 'inaccuracy') && prev && prev.loss >= 5 && Wb >= 60) cls = 'miss'; // failed to punish the opponent's error
+  const acc = clamp(103.1668 * Math.exp(-0.06 * loss) - 3.1669, 0, 100);
   const bestUci = l0.pv ? l0.pv[0] : null;
   const a = {
-    cls, loss, cpLoss, acc, Wb, Wa, phase: phaseOf(i), bestUci, bestSan: uciToSan(m.fenBefore, bestUci),
+    cls, loss, cpLoss, acc, Wb, Wa, ply: i, phase: phaseOf(i), bestUci, bestSan: uciToSan(m.fenBefore, bestUci),
     bestLine: l0.pv ? pvToSan(m.fenBefore, l0.pv, 8) : '', bestEval: l0,
     secondUci: lines[1] ? lines[1].pv[0] : null, secondSan: lines[1] ? uciToSan(m.fenBefore, lines[1].pv[0]) : '', secondEval: lines[1] || null
   };
@@ -1074,8 +1074,8 @@ async function explainMove(i) {
 }
 
 /* ---------- Stats & game rating ---------- */
-// Accuracy -> Game Rating, calibrated against Chess.com reviews (e.g. 82.9 -> ~1500, 74.2 -> ~1200).
-const ACC_PTS = [[0, 100], [40, 350], [50, 550], [60, 800], [70, 1050], [74, 1200], [78, 1330], [83, 1500], [87, 1700], [90, 1900], [95, 2300], [98, 2700], [100, 3000]];
+// Accuracy -> Game Rating, fitted to Chess.com Game Ratings over 6 reviewed games (12 sides).
+const ACC_PTS = [[0, 100], [58, 100], [63, 275], [68, 675], [70, 925], [72, 1150], [75, 1325], [78, 1450], [83, 1525], [88, 1600], [92, 1900], [95, 2250], [98, 2700], [100, 3000]];
 const ACPL_PTS = [[0, 2800], [10, 2300], [20, 1900], [35, 1450], [50, 1150], [75, 850], [100, 650], [150, 450], [250, 250], [1000, 100]];
 function interp(pts, x) {
   if (x <= pts[0][0]) return pts[0][1];
@@ -1085,10 +1085,17 @@ function interp(pts, x) {
   }
   return pts[pts.length - 1][1];
 }
+// Volatility weight: moves made while the evaluation was swinging count more (Lichess-style).
+function volWeight(ply) {
+  const n = S.evals.length, win = Math.min(8, Math.max(2, Math.floor(n / 10)));
+  const s = Math.max(0, Math.min(n - win, ply - Math.floor(win / 2)));
+  const ws = S.evals.slice(s, s + win).map(winW), m = ws.reduce((a, x) => a + x, 0) / ws.length;
+  return clamp(Math.sqrt(ws.reduce((a, x) => a + (x - m) ** 2, 0) / ws.length), 0.5, 12);
+}
 function gameAccuracy(list) {
   if (!list.length) return null;
-  const accs = list.map(a => a.acc);
-  const mean = accs.reduce((s, x) => s + x, 0) / accs.length;
+  const accs = list.map(a => a.acc), wts = list.map(a => a.ply != null ? volWeight(a.ply) : 1);
+  const mean = accs.reduce((s, x, j) => s + x * wts[j], 0) / wts.reduce((s, x) => s + x, 0);
   const harm = accs.length / accs.reduce((s, x) => s + 1 / Math.max(x, 10), 0);
   return (mean + harm) / 2;
 }
