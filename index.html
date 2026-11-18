@@ -934,7 +934,8 @@ function classify(i) {
   let cls;
   if (i < S.bookPly) { cls = 'book'; loss = 0; cpLoss = 0; }
   else if (legal === 1) cls = 'forced';
-  else if (loss <= 2 && (Wb < 97 || mateFor(l0, col)) && Wa >= 45 && isSacrifice(m, ea)) cls = 'brilliant';
+  // Brilliant: a sound sacrifice that is also clearly the best move; if a quieter move wins about as well (second line within 4 win%), it is not Brilliant.
+  else if (loss <= 2 && (Wb < 97 || mateFor(l0, col)) && Wa >= 45 && (!lines[1] || winFor(col, l0) - winFor(col, lines[1]) >= 4) && isSacrifice(m, ea)) cls = 'brilliant';
   else if (mi === 0 || loss < 0.25) {
     cls = 'best';
     const l1 = lines[1];
